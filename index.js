@@ -5,7 +5,7 @@ app.use(express.json());
 
 const processed = new Set(); // idempotent demo
 
-app.post("/ipn", async (req, res) => {
+app.post("/zonkhanh", async (req, res) => {
     const data = req.body;
 
     console.log("📥 IPN received:", JSON.stringify(data));
