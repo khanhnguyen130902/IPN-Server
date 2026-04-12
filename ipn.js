@@ -7,15 +7,16 @@ function delay(ms) {
 }
 
 async function sendTelegram(message, options = {}) {
-    const maxRetries = options.maxRetries || 3;
-    const retryDelayMs = options.retryDelayMs || 500;
     const threadId =
         options.threadId === undefined || options.threadId === null
             ? DEFAULT_MESSAGE_THREAD_ID
             : Number(options.threadId);
 
-    let lastError = null;
-    for (let attempt = 1; attempt <= maxRetries; attempt += 1) {
+    let attempt = 0;
+
+    while (true) {
+        attempt++;
+
         try {
             const response = await fetch(
                 `https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`,
@@ -33,27 +34,45 @@ async function sendTelegram(message, options = {}) {
                 }
             );
 
-            if (!response.ok) {
-                const errorText = await response.text();
-                throw new Error(`Telegram API error ${response.status}: ${errorText}`);
+            const data = await response.json();
+
+            if (response.ok) {
+                return { success: true, attempt };
             }
 
-            return { success: true, attempt };
+            // 🚨 HANDLE TELEGRAM ERROR
+            if (response.status === 429) {
+                const retryAfter = data?.parameters?.retry_after || 5;
+
+                console.warn(`⚠️ Rate limited. Retry after ${retryAfter}s`);
+
+                await delay((retryAfter + 1) * 1000);
+                continue; // retry vô hạn nhưng đúng luật
+            }
+
+            // ❌ các lỗi khác -> không retry
+            return {
+                success: false,
+                attempt,
+                error: data
+            };
+
         } catch (err) {
-            lastError = err;
-
-            if (attempt < maxRetries) {
-                await delay(retryDelayMs * attempt);
+            // ✅ network error → retry với backoff
+            if (attempt >= 5) {
+                return {
+                    success: false,
+                    attempt,
+                    error: err
+                };
             }
+
+            const backoff = Math.min(1000 * 2 ** attempt, 10000);
+            await delay(backoff);
         }
     }
-
-    return {
-        success: false,
-        attempt: maxRetries,
-        error: lastError
-    };
 }
+
 
 module.exports = {
     sendTelegram
