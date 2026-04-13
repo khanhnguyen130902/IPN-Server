@@ -57,7 +57,7 @@ const AES_KEY_LIST = [
 ].filter(item => item.key); // loại key null
 
 // 🧠 in-memory store để hiển thị UI log
-const MAX_LOGS = 5;
+const MAX_LOGS = 10000;
 const ipnLogs = [];
 const sseClients = new Set();
 const duplicateCounter = new Map();
