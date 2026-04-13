@@ -65,6 +65,21 @@ const telegramDedupe = new Map(); // key -> lastSentAtMs (best-effort)
 const TELEGRAM_DEDUPE_TTL_MS = 0;
 let ipnSequence = 0;
 
+async function initSequenceFromRedis() {
+  try {
+    const raw = await redis.lrange(REDIS_KEY, 0, 0); // lấy entry mới nhất
+    if (raw && raw.length > 0) {
+      const entry = typeof raw[0] === "string" ? JSON.parse(raw[0]) : raw[0];
+      if (entry?.Sequence) {
+        ipnSequence = entry.Sequence;
+        console.log(`[INIT] ipnSequence restored to ${ipnSequence}`);
+      }
+    }
+  } catch (err) {
+    console.error("initSequenceFromRedis error:", err.message);
+  }
+}
+
 setInterval(() => {
   const now = Date.now();
   for (const [key, ts] of telegramDedupe.entries()) {
@@ -1433,8 +1448,8 @@ function renderLogPage() {
   /* ── DETAIL ── */
   function selectEntry(seq) {
     selectedSeq = seq;
-    document.querySelectorAll(".list-item").forEach(el => {
-      el.classList.toggle("active", el.dataset.seq === String(seq));
+    listEl.querySelectorAll(".list-item").forEach(el => {
+    el.classList.toggle("active", el.dataset.seq === String(seq));
     });
     const entry = allEntries.find(e => e.Sequence == seq);
     if (!entry) return;
@@ -1666,7 +1681,8 @@ app.get("/", (req, res) => {
  */
 const PORT = process.env.PORT || 3000;
 
-app.listen(PORT, "0.0.0.0", () => {
+app.listen(PORT, "0.0.0.0", async () => {
+  await initSequenceFromRedis(); // ← thêm dòng này
   logJSON("SERVER_START", {
     port: PORT,
     message: "Server started successfully",
