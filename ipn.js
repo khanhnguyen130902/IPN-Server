@@ -1,4 +1,4 @@
-const BOT_TOKEN = "8489600440:AAHOFGM-xj9x8bc5GtfK6r2bTdwStI4iqeQ";
+const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const CHAT_ID = process.env.TELEGRAM_CHAT_ID || "-1003979672209";
 const DEFAULT_MESSAGE_THREAD_ID = Number(process.env.TELEGRAM_TOPIC_ID || "6");
 
@@ -7,6 +7,10 @@ function delay(ms) {
 }
 
 async function sendTelegram(message, options = {}) {
+    if (!BOT_TOKEN) {
+        return { success: false, attempt: 0, error: new Error("Missing TELEGRAM_BOT_TOKEN env var") };
+    }
+
     const threadId =
         options.threadId === undefined || options.threadId === null
             ? DEFAULT_MESSAGE_THREAD_ID
