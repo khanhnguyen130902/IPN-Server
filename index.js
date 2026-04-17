@@ -64,7 +64,7 @@ const AES_KEY_LIST = [
 ].filter(item => item.key); // loại key null
 
 // 🧠 in-memory store để hiển thị UI log
-const MAX_LOGS = 650; // giới hạn log lưu trữ (cả Redis và in-memory)
+const MAX_LOGS = 30000; // giới hạn log lưu trữ (cả Redis và in-memory)
 const ipnLogs = [];
 const sseClients = new Set();
 const duplicateCounter = new Map();

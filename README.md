@@ -31,7 +31,7 @@ Server Node.js/Express nhận IPN (Instant Payment Notification) được mã h�
 │   ┌─────────────────────────────────────┐                               │
 │   │  AES_KEY_LIST                       │                               │
 │   │  ├─ Dunk SG          (key #1)       │                               │
-│   │  ├─ Chè xôi bà Sáu  (key #2)       │                                │
+│   │  ├─ Chè xôi bà Sáu  (key #2)        │                               │
 │   │  ├─ Tabby VA         (key #3)       │                               │
 │   │  ├─ Fast Food KDC    (key #4)       │                               │
 │   │  ├─ Apple Store HN   (key #5)       │                               │
@@ -91,13 +91,13 @@ Server Node.js/Express nhận IPN (Instant Payment Notification) được mã h�
 │  • ipnSequence++ (global counter, restore từ Redis khi restart)         │
 │  • uid = Sequence + "_" + Date.now()                                    │
 │  • fingerprint = SHA-256 của decrypted payload                          │
-│  • duplicateInfo: "first_time" | "duplicate_x{N}"                      │
+│  • duplicateInfo: "first_time" | "duplicate_x{N}"                       │
 │  • gắn: route, merchant, __telegramThreadId, __fingerprint              │
 └──────────┬──────────────────────────────────────────────────────────────┘
            │
            ▼
 ┌─────────────────────────────────────────────────────────────────────────┐
-│  5. pushLog(entry) — phân phối đến 3 đích ĐỒNG THỜI                    │
+│  5. pushLog(entry) — phân phối đến 3 đích ĐỒNG THỜI                     │
 └──────┬──────────────────────┬───────────────────────┬───────────────────┘
        │                      │                       │
        ▼                      ▼                       ▼
@@ -126,13 +126,13 @@ Server Node.js/Express nhận IPN (Instant Payment Notification) được mã h�
                                               │  ✅/❌ [IPN-LOG]        │
                                               │  🐳 Merchant            │
                                               │  🤖 POS (master card)   │
-                                              │  📋 Validation status    │
+                                              │  📋 Validation status   │
                                               │  Decrypted JSON          │
                                               │                          │
                                               │  Nếu gửi FAIL:           │
                                               │  → buildTelegramErrorLog │
                                               │  → pushLog lại           │
-                                              │    (__skipTelegram: true) │
+                                              │    (__skipTelegram: true)│
                                               └──────────────────────────┘
 ```
 
@@ -146,16 +146,16 @@ Browser mở /logs
        ▼
 ┌─────────────────────────────────────────────────────┐
 │  GET /logs/history                                  │
-│  ← Redis.lrange("ipn:logs", 0, 9999)               │
-│  ← fallback: ipnLogs[] in-memory nếu Redis lỗi     │
+│  ← Redis.lrange("ipn:logs", 0, 9999)                │
+│  ← fallback: ipnLogs[] in-memory nếu Redis lỗi      │
 └──────────────────────┬──────────────────────────────┘
                        │ load history
                        ▼
 ┌─────────────────────────────────────────────────────┐
 │  EventSource("/logs/stream")                        │
 │  ← SSE keep-alive connection                        │
-│  ← retry: 3000ms nếu disconnect                    │
-│  ← nhận entry mới realtime qua sseClients.write()  │
+│  ← retry: 3000ms nếu disconnect                     │
+│  ← nhận entry mới realtime qua sseClients.write()   │
 └──────────────────────┬──────────────────────────────┘
                        │
                        ▼
@@ -167,12 +167,12 @@ Browser mở /logs
 │  • Tab title: "IPN Log Viewer +N" (unread count)    │
 │    - Đếm theo route nếu đang xem /logs/:route       │
 │    - Lưu readUids vào localStorage (per browser)    │
-│  • Chấm xanh trên list item = chưa đọc             │
-│    - Ẩn khi click xem                              │
+│  • Chấm xanh trên list item = chưa đọc              │
+│    - Ẩn khi click xem                               │
 │  • Copy JSON decrypted payload                      │
 │  • Clear: xóa UI + Redis + localStorage             │
 │  • SSE auto-select entry mới nhất (desktop)         │
-│  • Mobile: badge đếm IPN mới khi đang xem detail   │
+│  • Mobile: badge đếm IPN mới khi đang xem detail    │
 └─────────────────────────────────────────────────────┘
 ```
 
