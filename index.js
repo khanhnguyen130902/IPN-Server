@@ -212,18 +212,19 @@ process.on("SIGTERM", async () => {
   process.exit(0);
 });
 
+const OWNER_TELEGRAM_ID = process.env.OWNER_TELEGRAM_ID
+
 process.on("uncaughtException", async (err) => {
   const now = new Date().toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" });
-  const message = `💥 IPN Server crash\n🕐 ${now}\n❌ ${err.message}`;
+
+  const message = `💥 IPN Server crash\n🕐 ${now}\n❌ ${err.message}\n\ncc: ${OWNER_TELEGRAM_ID}`;
 
   try {
     await Promise.race([
       sendTelegram(message, { threadId: MONITOR_THREAD_ID }),
       new Promise((_, reject) => setTimeout(() => reject(new Error("Telegram timeout")), 4000))
     ]);
-  } catch (_) {
-    // Bỏ qua lỗi — không để block process.exit
-  }
+  } catch (_) { }
 
   process.exit(1);
 });
@@ -262,8 +263,12 @@ function decryptAES(encryptedHex, keyHex) {
   return JSON.parse(decrypted.toString("utf8"));
 }
 
+// function isValidPayload(data) {
+//   return data && typeof data === "object" && data.amount;
+// }
+
 function isValidPayload(data) {
-  return data && typeof data === "object" && data.amount;
+  return data !== null && typeof data === "object" && !Array.isArray(data);
 }
 
 function decryptWithKeys(encryptedHex) {
@@ -506,7 +511,8 @@ function createIPNHandler({ routeName, telegramThreadId }) {
     setImmediate(() => {
       const log = { decrypted: null, status: "pending", merchant: null, attempts: 0, error: null };
       try {
-        const encryptedHex = body?.data;
+        // const encryptedHex = body?.data;
+        const encryptedHex = typeof body?.data === "string" ? body.data.trim() : body?.data;
         if (!encryptedHex) throw new Error("Missing data field");
         const result = decryptWithKeys(encryptedHex);
         log.attempts = result.attempts;
@@ -566,16 +572,55 @@ app.get("/logs", (req, res) => res.sendFile(LOG_PAGE_PATH));
 // QUAN TRỌNG: /logs/history và /logs/stream phải đứng TRƯỚC /logs/:route
 // vì Express match theo thứ tự — nếu /:route đứng trước, "history" và "stream"
 // sẽ bị bắt như route param thay vì vào đúng handler.
+// app.get("/logs/history", async (req, res) => {
+//   try {
+//     // const raw = await redis.lrange(REDIS_KEY, 0, MAX_LOGS - 1);
+//     const start = Number(req.query.start || 0);
+//     const limit = Number(req.query.MAX_LOGS || 200);
+
+//     const raw = await redis.lrange(REDIS_KEY, start, start + MAX_LOGS - 1);
+//     const logs = raw.map(item => typeof item === "string" ? JSON.parse(item) : item);
+//     res.json({ logs, maxLogs: MAX_LOGS });
+//   } catch (err) {
+//     console.error("Redis history error:", err.message);
+//     res.json({ logs: [...ipnLogs].reverse(), maxLogs: MAX_LOGS });
+//   }
+// });
+
 app.get("/logs/history", async (req, res) => {
   try {
-    const raw = await redis.lrange(REDIS_KEY, 0, MAX_LOGS - 1);
-    const logs = raw.map(item => typeof item === "string" ? JSON.parse(item) : item);
-    res.json({ logs, maxLogs: MAX_LOGS });
+    const start = Number(req.query.start || 0);
+    const limit = Number(req.query.limit || 200);
+
+    const raw = await redis.lrange(
+      REDIS_KEY,
+      start,
+      start + limit - 1
+    );
+
+    const logs = raw.map(item =>
+      typeof item === "string" ? JSON.parse(item) : item
+    );
+
+    const total = await redis.llen(REDIS_KEY);
+    res.json({
+      logs,
+      start,
+      limit,
+      hasMore: raw.length === limit,
+      total
+    });
   } catch (err) {
     console.error("Redis history error:", err.message);
-    res.json({ logs: [...ipnLogs].reverse(), maxLogs: MAX_LOGS });
+    res.json({
+      logs: [...ipnLogs].slice(0, 200),
+      start: 0,
+      limit: 200,
+      hasMore: false
+    });
   }
 });
+
 
 app.delete("/logs/clear", async (req, res) => {
   ipnLogs.length = 0;
@@ -587,6 +632,7 @@ app.get("/logs/stream", (req, res) => {
   res.setHeader("Content-Type", "text/event-stream");
   res.setHeader("Cache-Control", "no-cache");
   res.setHeader("Connection", "keep-alive");
+  res.setHeader("X-Accel-Buffering", "no"); // ← THÊM DÒNG NÀY
   res.flushHeaders();
   res.write("retry: 3000\n\n");
   sseClients.add(res);
@@ -722,12 +768,15 @@ async function startServer() {
     logJSON("SERVER_START", {
       port: PORT,
       message: "Server started successfully",
-      aesKeys: aesKeyList.length,
-      ipnRoutes: ipnRoutes.map(r => r.path),
       telegram: "https://t.me/zonkhanh",
       owner: "zonkhanh"
     });
     sendServerWakeAlert();
+
+    // ← THÊM TẠM để test, xóa sau khi test xong
+    // setTimeout(() => {
+    //   throw new Error("Test uncaughtException — xóa dòng này sau khi test");
+    // }, 3000); // throw sau 3s để server kịp start
   });
 }
 

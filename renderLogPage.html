@@ -124,7 +124,7 @@
     }
 
     /* hide POST chip on very small screens */
-    .chip.post-chip {}
+    /* .chip.post-chip {} */
 
     .topbar-right {
       margin-left: auto;
@@ -838,6 +838,37 @@
         --sidebar-w: 280px;
       }
     }
+
+    /* ── LOAD MORE ── */
+    .load-more-wrap {
+      padding: 12px 14px;
+      border-top: 1px solid var(--border);
+    }
+
+    .load-more-btn {
+      width: 100%;
+      padding: 9px;
+      background: transparent;
+      border: 1px solid var(--border2);
+      border-radius: 6px;
+      color: var(--text2);
+      font-size: 11px;
+      font-family: 'JetBrains Mono', monospace;
+      cursor: pointer;
+      transition: all 0.15s;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    .load-more-btn:hover {
+      background: var(--bg3);
+      color: var(--text);
+      border-color: var(--accent);
+    }
+
+    .load-more-btn:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
   </style>
 </head>
 
@@ -931,11 +962,16 @@
     let currentFilter = "all";
     let MAX_LOGS = 500;
     let isMobile = () => window.innerWidth <= 768;
-    let mobileView = "list"; // "list" | "detail"
+    let mobileView = "list";
     let newCount = 0;
-    let unreadUids = new Set(); // track uid chưa xem
+    let totalIpnCount = 0;
 
-    // Load từ localStorage, riêng biệt mỗi browser
+    // ── PAGINATION STATE ──
+    const PAGE_SIZE = 200;
+    let currentStart = 0;
+    let hasMore = false;
+    let isLoadingMore = false;
+
     const readUids = new Set(JSON.parse(localStorage.getItem("ipn_read") || "[]"));
 
     function markRead(uid) {
@@ -945,7 +981,6 @@
     }
 
     function updateTabTitle() {
-      // ← lọc theo routeFilter nếu đang ở /logs/:route
       const n = allEntries.filter(e =>
         !readUids.has(e.uid) &&
         (routeFilter ? e.route === routeFilter : true)
@@ -981,7 +1016,6 @@
 
     function formatTime(ts) {
       if (!ts) return "";
-
       return new Date(ts).toLocaleString("vi-VN", {
         timeZone: "Asia/Ho_Chi_Minh",
         hour12: false
@@ -991,7 +1025,7 @@
     function highlightJSON(obj) {
       const raw = JSON.stringify(obj, null, 2);
       return esc(raw).replace(
-        /("(?:\\u[a-fA-F0-9]{4}|\\[^u]|[^\\"])*")(\\s*:\\s*)|("(?:\\u[a-fA-F0-9]{4}|\\[^u]|[^\\"])*")|\\b(true|false)\\b|\\b(null)\\b|(-?\\d+(?:\\.\\d+)?(?:[eE][+\\-]?\\d+)?)/g,
+        /("(?:\\u[a-fA-F0-9]{4}|\\[^u]|[^\\"])*")(\s*:\s*)|("(?:\\u[a-fA-F0-9]{4}|\\[^u]|[^\\"])*")|\b(true|false)\b|\b(null)\b|(-?\d+(?:\.\d+)?(?:[eE][+\-]?\d+)?)/g,
         (m, kTok, sep, sTok, bTok, nulTok, numTok) => {
           if (kTok) return '<span class="json-key">' + kTok + '</span>' + sep;
           if (sTok) return '<span class="json-str">' + sTok + '</span>';
@@ -1012,28 +1046,20 @@
     }
 
     function matchFilter(entry) {
-      // 🔥 filter theo route từ URL trước
-      if (routeFilter && entry.route !== routeFilter) {
-        return false;
-      }
-
+      if (routeFilter && entry.route !== routeFilter) return false;
       if (currentFilter === "all") return true;
-
       if (currentFilter === "ok") {
         return !entry.decryptFailed && (!entry.validation?.applied || entry.validation.valid);
       }
-
       if (currentFilter === "fail") {
         return (
           entry.decryptFailed ||
           (entry.validation?.applied && !entry.validation.valid)
         );
       }
-
       if (currentFilter === "dup") {
         return entry.duplicateInfo && entry.duplicateInfo !== "first_time";
       }
-
       return true;
     }
 
@@ -1047,7 +1073,7 @@
 
       const li = document.createElement("div");
       li.className = "list-item" + (isFailed ? " failed" : "");
-      li.dataset.seq = entry.uid; // ← chỉ set 1 lần, dùng uid
+      li.dataset.seq = entry.uid;
 
       li.innerHTML =
         '<div class="item-row1">' +
@@ -1065,11 +1091,32 @@
         '</div>';
 
       li.addEventListener("click", () => {
-        selectEntry(entry.uid); // ← đúng key
+        selectEntry(entry.uid);
         if (isMobile()) mobileShowDetail();
       });
 
       return li;
+    }
+
+    /* ── LOAD MORE BUTTON ── */
+    function renderLoadMoreBtn() {
+      // Xóa nút cũ nếu có
+      const old = listEl.querySelector(".load-more-wrap");
+      if (old) old.remove();
+
+      if (!hasMore) return;
+
+      const wrap = document.createElement("div");
+      wrap.className = "load-more-wrap";
+
+      const btn = document.createElement("button");
+      btn.className = "load-more-btn";
+      btn.id = "load-more-btn";
+      btn.textContent = "Tải thêm...";
+      btn.onclick = loadMore;
+
+      wrap.appendChild(btn);
+      listEl.appendChild(wrap);
     }
 
     function rebuildList() {
@@ -1077,6 +1124,8 @@
       listEl.innerHTML = "";
       if (!filtered.length) {
         listEl.innerHTML = '<div class="empty-list"><div class="empty-icon">🔍</div>Không có request nào.</div>';
+        // Vẫn cần render nút load more nếu còn data phía server
+        renderLoadMoreBtn();
         return;
       }
       filtered.forEach(e => listEl.appendChild(buildListItem(e)));
@@ -1084,6 +1133,7 @@
         const el = listEl.querySelector('[data-seq="' + selectedSeq + '"]');
         if (el) el.classList.add("active");
       }
+      renderLoadMoreBtn();
     }
 
     /* ── DETAIL ── */
@@ -1092,14 +1142,10 @@
       listEl.querySelectorAll(".list-item").forEach(el => {
         el.classList.toggle("active", el.dataset.seq === uid);
       });
-
-      // ← thêm
       markRead(uid);
       updateTabTitle();
-      // ẩn chấm xanh của item vừa click
       const dot = listEl.querySelector('[data-seq="' + uid + '"] .status-dot');
       if (dot) dot.style.opacity = "0";
-
       const entry = allEntries.find(e => e.uid === uid);
       if (!entry) return;
       renderDetail(entry);
@@ -1124,8 +1170,6 @@
       else if (isDup) { pillCls = "warn"; pillTxt = "DUPLICATE"; }
 
       let html = '';
-
-      // sticky topbar
       html += '<div class="detail-topbar">';
       html += '<button class="back-btn" onclick="mobileShowList()">' +
         '<svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>Back' +
@@ -1137,7 +1181,6 @@
         html += '<button class="copy-btn" onclick="copyJSON()">Copy JSON</button>';
       }
       html += '</div>';
-
       html += '<div class="detail-body">';
 
       if (isFailed) {
@@ -1213,43 +1256,91 @@
       entry._ts = Date.now();
       if (allEntries.length >= MAX_LOGS) allEntries.pop();
       allEntries.unshift(entry);
-
       updateTabTitle();
       updateCounter();
     }
 
     function updateCounter() {
-      counterEl.textContent = allEntries.length + " request" + (allEntries.length !== 1 ? "s" : "");
+      const n = totalIpnCount > 0 ? totalIpnCount : allEntries.length;
+      counterEl.textContent = n.toLocaleString("vi-VN") + " request" + (n !== 1 ? "s" : "");
     }
 
     function clearAll() {
       allEntries = []; selectedSeq = null; newCount = 0;
+      currentStart = 0; hasMore = false;
       listEl.innerHTML = '<div class="empty-list"><div class="empty-icon">📭</div>Chưa có IPN nào.<br/>Đang chờ request...</div>';
       detailEl.innerHTML = '<div class="detail-empty"><div class="big">👈</div>Chọn một request để xem chi tiết</div>';
       newBadge.classList.remove("visible");
       updateCounter();
-      updateTabTitle();   // ← thêm
+      updateTabTitle();
       if (isMobile()) mobileShowList();
+    }
+
+    /* ── LOAD MORE ── */
+    async function loadMore() {
+      if (isLoadingMore || !hasMore) return;
+      isLoadingMore = true;
+
+      const btn = document.getElementById("load-more-btn");
+      if (btn) { btn.disabled = true; btn.textContent = "Đang tải..."; }
+
+      try {
+        const res = await fetch(`/logs/history?start=${currentStart}&limit=${PAGE_SIZE}`);
+        const data = await res.json();
+        const newLogs = data.logs || [];
+
+        newLogs.forEach(e => {
+          e._ts = e.receivedAt || null;
+          // Tránh duplicate nếu có entry mới đến qua SSE trùng uid
+          if (!allEntries.find(x => x.uid === e.uid)) {
+            allEntries.push(e);
+          }
+        });
+
+        currentStart += newLogs.length;
+        hasMore = data.hasMore === true;
+
+        updateCounter();
+        rebuildList();
+
+        // Giữ scroll position không nhảy lên đầu
+        if (btn) {
+          const newBtn = document.getElementById("load-more-btn");
+          if (newBtn) newBtn.scrollIntoView({ block: "nearest" });
+        }
+      } catch (e) {
+        console.error("loadMore error:", e);
+        if (btn) { btn.disabled = false; btn.textContent = "Thử lại"; }
+      } finally {
+        isLoadingMore = false;
+      }
     }
 
     /* ── INIT ── */
     async function init() {
-      const res = await fetch("/logs/history");
+      const res = await fetch(`/logs/history?start=0&limit=${PAGE_SIZE}`);
       const data = await res.json();
       MAX_LOGS = data.maxLogs || 500;
 
-      (data.logs || []).forEach(e => { e._ts = e.receivedAt || null; allEntries.push(e); });
+      const logs = data.logs || [];
+      logs.forEach(e => { e._ts = e.receivedAt || null; allEntries.push(e); });
+
+      currentStart = logs.length;
+      hasMore = data.hasMore === true;
+      if (typeof data.total === "number") totalIpnCount = data.total;
+
       updateCounter();
       rebuildList();
       if (allEntries.length && !isMobile()) selectEntry(allEntries[0].uid);
 
-      // Cleanup uid cũ không còn trong logs nữa
+      // Cleanup uid cũ
       const validUids = new Set(allEntries.map(e => e.uid));
       for (const uid of readUids) {
         if (!validUids.has(uid)) readUids.delete(uid);
       }
       localStorage.setItem("ipn_read", JSON.stringify([...readUids]));
 
+      // SSE — chỉ nhận entry mới realtime, không liên quan pagination
       const source = new EventSource("/logs/stream");
       source.onmessage = (event) => {
         const entry = JSON.parse(event.data);
@@ -1259,7 +1350,6 @@
         const el = listEl.querySelector('[data-seq="' + entry.uid + '"]');
         if (el) el.classList.add("new-flash");
 
-        // auto-select on desktop; badge on mobile if viewing detail
         if (!isMobile()) {
           if (selectedSeq === null) selectEntry(entry.uid);
         } else {
