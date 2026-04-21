@@ -1051,6 +1051,208 @@
         .success-popup-btn:hover {
             background: #34d39935;
         }
+
+        /* ── CONFIRM DELETE MODAL (key/route) ── */
+        .confirm-modal-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.65);
+            z-index: 150;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            backdrop-filter: blur(3px);
+        }
+
+        .confirm-modal-overlay.open {
+            display: flex;
+        }
+
+        .confirm-modal-box {
+            background: var(--bg2);
+            border: 1px solid #f8717140;
+            border-radius: 12px;
+            padding: 24px;
+            width: 100%;
+            max-width: 400px;
+            animation: modal-in 0.2s ease;
+        }
+
+        .confirm-modal-icon {
+            font-size: 32px;
+            margin-bottom: 12px;
+            line-height: 1;
+        }
+
+        .confirm-modal-title {
+            font-size: 15px;
+            font-weight: 700;
+            color: var(--text);
+            margin-bottom: 6px;
+        }
+
+        .confirm-modal-desc {
+            font-size: 12px;
+            color: var(--text2);
+            font-family: 'JetBrains Mono', monospace;
+            margin-bottom: 20px;
+            line-height: 1.6;
+        }
+
+        .confirm-modal-target {
+            background: var(--bg3);
+            border: 1px solid var(--border2);
+            border-radius: 6px;
+            padding: 8px 12px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 13px;
+            color: var(--yellow);
+            margin-bottom: 20px;
+            word-break: break-all;
+        }
+
+        .confirm-modal-actions {
+            display: flex;
+            gap: 10px;
+        }
+
+        .btn-confirm-cancel {
+            flex: 1;
+            background: transparent;
+            border: 1px solid var(--border2);
+            border-radius: 7px;
+            padding: 9px 14px;
+            color: var(--text2);
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            font-family: 'Inter', sans-serif;
+            transition: all 0.15s;
+        }
+
+        .btn-confirm-cancel:hover {
+            background: var(--bg3);
+            color: var(--text);
+        }
+
+        .btn-confirm-delete {
+            flex: 2;
+            background: #f8717118;
+            border: 1px solid #f8717150;
+            border-radius: 7px;
+            padding: 9px 16px;
+            color: var(--red);
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            font-family: 'Inter', sans-serif;
+            transition: all 0.15s;
+        }
+
+        .btn-confirm-delete:hover {
+            background: #f8717130;
+            border-color: var(--red);
+        }
+
+        .btn-confirm-delete:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+        }
+
+        /* ── ACTION SUCCESS POPUP (add/delete key/route) ── */
+        .action-popup-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.55);
+            z-index: 200;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            backdrop-filter: blur(3px);
+        }
+
+        .action-popup-overlay.open {
+            display: flex;
+        }
+
+        .action-popup-box {
+            background: var(--bg2);
+            border-radius: 14px;
+            padding: 28px 24px;
+            width: 100%;
+            max-width: 340px;
+            text-align: center;
+            animation: modal-in 0.22s ease;
+        }
+
+        .action-popup-box.is-success {
+            border: 1px solid #34d39940;
+        }
+
+        .action-popup-box.is-delete {
+            border: 1px solid #f8717140;
+        }
+
+        .action-popup-icon {
+            font-size: 40px;
+            margin-bottom: 10px;
+            line-height: 1;
+        }
+
+        .action-popup-title {
+            font-size: 16px;
+            font-weight: 700;
+            margin-bottom: 6px;
+        }
+
+        .action-popup-box.is-success .action-popup-title {
+            color: var(--green);
+        }
+
+        .action-popup-box.is-delete .action-popup-title {
+            color: var(--red);
+        }
+
+        .action-popup-desc {
+            font-size: 12px;
+            color: var(--text2);
+            font-family: 'JetBrains Mono', monospace;
+            margin-bottom: 20px;
+            line-height: 1.6;
+        }
+
+        .action-popup-btn {
+            border-radius: 8px;
+            padding: 9px 28px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            font-family: 'Inter', sans-serif;
+            transition: all 0.15s;
+            border: none;
+        }
+
+        .action-popup-box.is-success .action-popup-btn {
+            background: #34d39920;
+            border: 1px solid #34d39950;
+            color: var(--green);
+        }
+
+        .action-popup-box.is-success .action-popup-btn:hover {
+            background: #34d39935;
+        }
+
+        .action-popup-box.is-delete .action-popup-btn {
+            background: #f8717115;
+            border: 1px solid #f8717140;
+            color: var(--red);
+        }
+
+        .action-popup-box.is-delete .action-popup-btn:hover {
+            background: #f8717128;
+        }
     </style>
 </head>
 
@@ -1091,7 +1293,7 @@
                 🔑 AES Keys <span class="tab-count" id="keys-count">-</span>
             </button>
             <button class="tab-btn" onclick="switchTab('routes', this)">
-                🛤 IPN Routes <span class="tab-count" id="routes-count">-</span>
+                ✈️ IPN Routes <span class="tab-count" id="routes-count">-</span>
             </button>
             <button class="tab-btn" onclick="switchTab('mgmt', this)">
                 ⚙️ Management
@@ -1269,6 +1471,31 @@
             <div class="success-popup-title">Xoá thành công!</div>
             <div class="success-popup-desc" id="success-popup-desc">Đã xoá toàn bộ IPN records khỏi Redis</div>
             <button class="success-popup-btn" onclick="closeSuccessPopup()">OK</button>
+        </div>
+    </div>
+
+    <!-- CONFIRM DELETE MODAL (key / route) -->
+    <div id="confirm-delete-overlay" class="confirm-modal-overlay" onclick="closeConfirmModal(event)">
+        <div class="confirm-modal-box" onclick="event.stopPropagation()">
+            <div class="confirm-modal-icon" id="confirm-modal-icon">🗑</div>
+            <div class="confirm-modal-title" id="confirm-modal-title">Xác nhận xoá</div>
+            <div class="confirm-modal-desc" id="confirm-modal-desc"></div>
+            <div class="confirm-modal-target" id="confirm-modal-target"></div>
+            <div class="confirm-modal-actions">
+                <button class="btn-confirm-cancel" onclick="closeConfirmModal()">Huỷ</button>
+                <button class="btn-confirm-delete" id="btn-confirm-delete-ok" onclick="doConfirmedDelete()">🗑
+                    Xoá</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ACTION SUCCESS / DELETE POPUP -->
+    <div id="action-popup-overlay" class="action-popup-overlay" onclick="closeActionPopup()">
+        <div class="action-popup-box" id="action-popup-box" onclick="event.stopPropagation()">
+            <div class="action-popup-icon" id="action-popup-icon"></div>
+            <div class="action-popup-title" id="action-popup-title"></div>
+            <div class="action-popup-desc" id="action-popup-desc"></div>
+            <button class="action-popup-btn" onclick="closeActionPopup()">OK</button>
         </div>
     </div>
 
@@ -1450,8 +1677,8 @@
             if (data.ok) {
                 document.getElementById("key-name").value = "";
                 document.getElementById("key-value").value = "";
-                showToast("✅ Đã thêm key thành công", "success");
-                loadKeys();
+                await loadKeys();
+                showActionPopup("success", "Thêm thành công!", `AES Key của merchant "${name}" đã được đăng ký.\nServer sẽ tự động nhận decrypt từ merchant này.`);
             } else {
                 msgEl.textContent = data.error || "Lỗi không xác định";
                 msgEl.className = "form-msg error"; // CSS class tự xử lý display:block
@@ -1459,11 +1686,23 @@
         }
 
         async function deleteKey(idx) {
-            if (!confirm("Xoá AES key này? IPN từ merchant tương ứng sẽ không decrypt được nữa.")) return;
-            const data = await api("DELETE", `/dashboard/aes-keys/${idx}`);
-            if (!data) return;
-            if (data.ok) { showToast(`🗑 Đã xoá: ${data.removed}`, "success"); loadKeys(); }
-            else showToast(data.error || "Xoá thất bại", "error");
+            const key = cachedKeys.find(k => k.idx === idx);
+            openConfirmModal({
+                title: "Xoá AES Key?",
+                desc: "IPN từ merchant tương ứng sẽ không decrypt được nữa.",
+                target: key ? `${key.name}  (${key.keyPreview})` : `key #${idx}`,
+                onConfirm: async (btn) => {
+                    const data = await api("DELETE", `/dashboard/aes-keys/${idx}`);
+                    if (!data) { btn.disabled = false; btn.textContent = "🗑 Xoá"; return; }
+                    closeConfirmModal();
+                    if (data.ok) {
+                        await loadKeys();
+                        showActionPopup("delete", "Đã xoá thành công!", `AES Key "${data.removed}" đã bị xoá.\nMerchant tương ứng sẽ không decrypt được nữa.`);
+                    } else {
+                        showActionPopup("error", "Xoá thất bại", data.error || "Lỗi không xác định");
+                    }
+                }
+            });
         }
 
         // ── IPN ROUTES ──
@@ -1525,8 +1764,8 @@
             if (data.ok) {
                 document.getElementById("route-path").value = "";
                 document.getElementById("route-thread").value = "";
-                showToast(`✅ Route '${routePath}' đã được đăng ký live`, "success");
-                loadRoutes();
+                await loadRoutes();
+                showActionPopup("success", "Thêm thành công!", `Route "${routePath}" đã được đăng ký live.\nIPN gửi đến path này sẽ được nhận ngay.`);
             } else {
                 msgEl.textContent = data.error || "Lỗi không xác định";
                 msgEl.className = "form-msg error"; // CSS class tự xử lý display:block
@@ -1534,11 +1773,23 @@
         }
 
         async function deleteRoute(idx) {
-            if (!confirm("Xoá route này? IPN gửi đến path này sẽ không được nhận nữa.")) return;
-            const data = await api("DELETE", `/dashboard/ipn-routes/${idx}`);
-            if (!data) return;
-            if (data.ok) { showToast(`🗑 Đã xoá route: ${data.removed}`, "success"); loadRoutes(); }
-            else showToast(data.error || "Xoá thất bại", "error");
+            const route = cachedRoutes.find(r => r.idx === idx);
+            openConfirmModal({
+                title: "Xoá IPN Route?",
+                desc: "IPN gửi đến path này sẽ không được nhận nữa.",
+                target: route ? route.path : `/route #${idx}`,
+                onConfirm: async (btn) => {
+                    const data = await api("DELETE", `/dashboard/ipn-routes/${idx}`);
+                    if (!data) { btn.disabled = false; btn.textContent = "🗑 Xoá"; return; }
+                    closeConfirmModal();
+                    if (data.ok) {
+                        await loadRoutes();
+                        showActionPopup("delete", "Đã xoá thành công!", `Route "${data.removed}" đã bị xoá.\nIPN gửi đến path này sẽ không được nhận nữa.`);
+                    } else {
+                        showActionPopup("error", "Xoá thất bại", data.error || "Lỗi không xác định");
+                    }
+                }
+            });
         }
 
         // ── MANAGEMENT TAB ──
@@ -1705,7 +1956,12 @@
 
         // close modal on ESC
         document.addEventListener("keydown", e => {
-            if (e.key === "Escape") document.getElementById("delete-modal-overlay").classList.remove("open");
+            if (e.key === "Escape") {
+                document.getElementById("delete-modal-overlay").classList.remove("open");
+                document.getElementById("confirm-delete-overlay").classList.remove("open");
+                document.getElementById("action-popup-overlay").classList.remove("open");
+                _confirmCallback = null;
+            }
         });
 
         function showSuccessPopup(deletedCount) {
@@ -1732,6 +1988,63 @@
             el.className = "show " + type;
             clearTimeout(toastTimer);
             toastTimer = setTimeout(() => el.className = "", 2800);
+        }
+
+        // ── CONFIRM DELETE MODAL (key / route) ──
+        let _confirmCallback = null;
+
+        function openConfirmModal({ icon, title, desc, target, onConfirm }) {
+            _confirmCallback = onConfirm;
+            document.getElementById("confirm-modal-icon").textContent = icon;
+            document.getElementById("confirm-modal-title").textContent = title;
+            document.getElementById("confirm-modal-desc").textContent = desc;
+            document.getElementById("confirm-modal-target").textContent = target;
+            const btn = document.getElementById("btn-confirm-delete-ok");
+            btn.disabled = false;
+            btn.textContent = "🗑 Xoá";
+            document.getElementById("confirm-delete-overlay").classList.add("open");
+        }
+
+        function closeConfirmModal(e) {
+            if (e && e.target !== document.getElementById("confirm-delete-overlay")) return;
+            document.getElementById("confirm-delete-overlay").classList.remove("open");
+            _confirmCallback = null;
+        }
+
+        async function doConfirmedDelete() {
+            if (!_confirmCallback) return;
+            const btn = document.getElementById("btn-confirm-delete-ok");
+            btn.disabled = true;
+            btn.textContent = "⏳ Đang xoá...";
+            await _confirmCallback(btn);
+        }
+
+        // ── ACTION POPUP (add / delete success) ──
+        function showActionPopup(type, title, desc) {
+            const overlay = document.getElementById("action-popup-overlay");
+            const box = document.getElementById("action-popup-box");
+            const iconEl = document.getElementById("action-popup-icon");
+            const titleEl = document.getElementById("action-popup-title");
+            const descEl = document.getElementById("action-popup-desc");
+
+            box.className = "action-popup-box";
+            if (type === "success") {
+                box.classList.add("is-success");
+                iconEl.textContent = "✅";
+            } else if (type === "delete") {
+                box.classList.add("is-delete");
+                iconEl.textContent = "🗑️";
+            } else {
+                box.classList.add("is-delete");
+                iconEl.textContent = "❌";
+            }
+            titleEl.textContent = title;
+            descEl.textContent = desc;
+            overlay.classList.add("open");
+        }
+
+        function closeActionPopup() {
+            document.getElementById("action-popup-overlay").classList.remove("open");
         }
 
         // ── KEYBOARD ──

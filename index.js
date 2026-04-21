@@ -160,7 +160,8 @@ const MONITOR_THREAD_ID = 1820;
 // =========================
 const ipnLogs = [];
 const sseClients = new Set();
-const duplicateCounter = new Map();
+const duplicateCounter = new Map(); // Map<fingerprint, { count, lastSeen }>
+const DUPLICATE_COUNTER_TTL_MS = 24 * 60 * 60 * 1000; // 24 giờ
 const telegramDedupe = new Map();
 const TELEGRAM_DEDUPE_TTL_MS = 0;
 let ipnSequence = 0;
@@ -180,12 +181,13 @@ async function initSequenceFromRedis() {
   }
 }
 
+// Cleanup duplicateCounter sau 24h không thấy fingerprint
 setInterval(() => {
   const now = Date.now();
-  for (const [key, ts] of telegramDedupe.entries()) {
-    if (now - ts > TELEGRAM_DEDUPE_TTL_MS) telegramDedupe.delete(key);
+  for (const [key, val] of duplicateCounter.entries()) {
+    if (now - val.lastSeen > DUPLICATE_COUNTER_TTL_MS) duplicateCounter.delete(key);
   }
-}, 60_000);
+}, 60 * 60 * 1000); // chạy mỗi 1 giờ
 
 // =========================
 // SERVER ALERTS
@@ -474,8 +476,13 @@ function buildLogEntry({ body, log, validation }) {
   ipnSequence += 1;
   const Sequence = ipnSequence;
   const fingerprint = getFingerprint(log.decrypted || body);
-  const duplicateCount = (duplicateCounter.get(fingerprint) || 0) + 1;
-  duplicateCounter.set(fingerprint, duplicateCount);
+
+  // TRƯỚC: duplicateCounter.set(fingerprint, duplicateCount)
+  // SAU: lưu thêm lastSeen để cleanup được
+  const existing = duplicateCounter.get(fingerprint);
+  const duplicateCount = (existing?.count || 0) + 1;
+  duplicateCounter.set(fingerprint, { count: duplicateCount, lastSeen: Date.now() });
+
   const duplicateInfo = duplicateCount === 1 ? "first_time" : `duplicate_x${duplicateCount}`;
   const uid = `${Sequence}_${Date.now()}`;
   return { Sequence, uid, duplicateInfo, receivedAt: Date.now(), ...log, validation, __fingerprint: fingerprint };
