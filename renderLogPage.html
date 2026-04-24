@@ -920,8 +920,13 @@
       min-width: 14px;
     }
 
-    .aes-key-status.ok  { color: var(--green); }
-    .aes-key-status.err { color: var(--red); }
+    .aes-key-status.ok {
+      color: var(--green);
+    }
+
+    .aes-key-status.err {
+      color: var(--red);
+    }
 
     /* local-decrypt result badge */
     .local-decrypt-badge {
@@ -963,7 +968,10 @@
         font-size: 10px;
         padding: 4px 7px;
       }
-      .aes-key-status { display: none; }
+
+      .aes-key-status {
+        display: none;
+      }
     }
 
     @media (max-width: 400px) {
@@ -987,15 +995,8 @@
     <span class="chip post-chip">POST</span>
     <div class="topbar-right">
       <div class="aes-key-wrap">
-        <input
-          id="aes-key-input"
-          class="aes-key-input"
-          placeholder="AES Key (hex 64)…"
-          maxlength="64"
-          autocomplete="off"
-          spellcheck="false"
-          inputmode="text"
-        />
+        <input id="aes-key-input" class="aes-key-input" placeholder="AES Key (hex 64)…" maxlength="64"
+          autocomplete="off" spellcheck="false" inputmode="text" />
         <span class="aes-key-status" id="aes-key-status"></span>
       </div>
       <span id="counter-chip">0 requests</span>
@@ -1081,7 +1082,7 @@
     let totalIpnCount = 0;
 
     // ── PAGINATION STATE ──
-    const PAGE_SIZE = 200;
+    const PAGE_SIZE = 100;
     let currentStart = 0;
     let hasMore = false;
     let isLoadingMore = false;
@@ -1457,7 +1458,9 @@
     }
 
     function updateCounter() {
-      const n = totalIpnCount > 0 ? totalIpnCount : allEntries.length;
+      const n = routeFilter
+        ? allEntries.filter(e => e.route === routeFilter).length
+        : (totalIpnCount > 0 ? totalIpnCount : allEntries.length);
       counterEl.textContent = n.toLocaleString("vi-VN") + " request" + (n !== 1 ? "s" : "");
     }
 
@@ -1612,9 +1615,9 @@
       }
       try {
         const hexToBytes = h => new Uint8Array(h.match(/.{1,2}/g).map(b => parseInt(b, 16)));
-        const ivBytes   = hexToBytes(rawHex.substring(0, 32));
+        const ivBytes = hexToBytes(rawHex.substring(0, 32));
         const dataBytes = hexToBytes(rawHex.substring(32));
-        const keyBytes  = hexToBytes(keyHex);
+        const keyBytes = hexToBytes(keyHex);
 
         const cryptoKey = await crypto.subtle.importKey(
           "raw", keyBytes,

@@ -580,37 +580,21 @@ app.get("/logs", (req, res) => res.sendFile(LOG_PAGE_PATH));
 // QUAN TRỌNG: /logs/history và /logs/stream phải đứng TRƯỚC /logs/:route
 // vì Express match theo thứ tự — nếu /:route đứng trước, "history" và "stream"
 // sẽ bị bắt như route param thay vì vào đúng handler.
-// app.get("/logs/history", async (req, res) => {
-//   try {
-//     // const raw = await redis.lrange(REDIS_KEY, 0, MAX_LOGS - 1);
-//     const start = Number(req.query.start || 0);
-//     const limit = Number(req.query.MAX_LOGS || 200);
-
-//     const raw = await redis.lrange(REDIS_KEY, start, start + MAX_LOGS - 1);
-//     const logs = raw.map(item => typeof item === "string" ? JSON.parse(item) : item);
-//     res.json({ logs, maxLogs: MAX_LOGS });
-//   } catch (err) {
-//     console.error("Redis history error:", err.message);
-//     res.json({ logs: [...ipnLogs].reverse(), maxLogs: MAX_LOGS });
-//   }
-// });
 
 app.get("/logs/history", async (req, res) => {
   try {
     const start = Number(req.query.start || 0);
     const limit = Number(req.query.limit || 200);
 
-    const raw = await redis.lrange(
-      REDIS_KEY,
-      start,
-      start + limit - 1
-    );
+    const [raw, total] = await Promise.all([
+      redis.lrange(REDIS_KEY, start, start + limit - 1),
+      redis.llen(REDIS_KEY)
+    ]);
 
     const logs = raw.map(item =>
       typeof item === "string" ? JSON.parse(item) : item
     );
 
-    const total = await redis.llen(REDIS_KEY);
     res.json({
       logs,
       start,
@@ -735,10 +719,10 @@ app.post("/dashboard/ipn-routes", requireDashboardAuth, async (req, res) => {
   if (ipnRoutes.some(r => r.path === routePath))
     return res.status(400).json({ error: `Route '${routePath}' đã tồn tại` });
 
-  // Default telegram thread id is 4206
+  // Default telegram thread id is 4742
   const threadId = telegramThreadId !== undefined && telegramThreadId !== ""
-  ? Number(telegramThreadId)
-  : 4206;
+    ? Number(telegramThreadId)
+    : 4742;
 
   ipnRoutes.push({ path: routePath, telegramThreadId: threadId });
   await saveIpnRoutes();
