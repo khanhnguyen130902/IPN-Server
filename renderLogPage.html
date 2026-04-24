@@ -1137,9 +1137,13 @@
       });
     }
 
-    function highlightJSON(obj) {
+    // Cache highlight results by uid to avoid re-running regex on same data
+    const _highlightCache = new Map();
+
+    function highlightJSON(obj, cacheKey) {
+      if (cacheKey && _highlightCache.has(cacheKey)) return _highlightCache.get(cacheKey);
       const raw = JSON.stringify(obj, null, 2);
-      return esc(raw).replace(
+      const result = esc(raw).replace(
         /("(?:\\u[a-fA-F0-9]{4}|\\[^u]|[^\\"])*")(\s*:\s*)|("(?:\\u[a-fA-F0-9]{4}|\\[^u]|[^\\"])*")|\b(true|false)\b|\b(null)\b|(-?\d+(?:\.\d+)?(?:[eE][+\-]?\d+)?)/g,
         (m, kTok, sep, sTok, bTok, nulTok, numTok) => {
           if (kTok) return '<span class="json-key">' + kTok + '</span>' + sep;
@@ -1150,6 +1154,15 @@
           return m;
         }
       );
+      if (cacheKey) {
+        // Keep cache size bounded
+        if (_highlightCache.size > 300) {
+          const firstKey = _highlightCache.keys().next().value;
+          _highlightCache.delete(firstKey);
+        }
+        _highlightCache.set(cacheKey, result);
+      }
+      return result;
     }
 
     /* ── FILTER ── */
@@ -1205,12 +1218,30 @@
         (ts ? '<span class="time-text">' + esc(formatTime(ts)) + '</span>' : '') +
         '</div>';
 
-      li.addEventListener("click", () => {
+      // SAU — pointerdown fires NGAY khi ngón tay/chuột chạm, không chờ 300ms
+      li.addEventListener("pointerdown", (e) => {
+        // Chỉ xử lý left click / primary touch
+        if (e.button !== undefined && e.button !== 0) return;
         selectEntry(entry.uid);
         if (isMobile()) mobileShowDetail();
       });
 
       return li;
+    }
+
+    /* ── PREPEND single item (used by SSE — avoids full rebuildList) ── */
+    function prependItem(entry) {
+      if (!matchFilter(entry)) return;
+      // Remove empty-list placeholder if present
+      const empty = listEl.querySelector(".empty-list");
+      if (empty) empty.remove();
+
+      const li = buildListItem(entry);
+      const loadMoreWrap = listEl.querySelector(".load-more-wrap");
+      listEl.insertBefore(li, listEl.firstChild);
+
+      // Re-apply active state if needed
+      if (selectedSeq === entry.uid) li.classList.add("active");
     }
 
     /* ── LOAD MORE BUTTON ── */
@@ -1239,11 +1270,14 @@
       listEl.innerHTML = "";
       if (!filtered.length) {
         listEl.innerHTML = '<div class="empty-list"><div class="empty-icon">🔍</div>Không có request nào.</div>';
-        // Vẫn cần render nút load more nếu còn data phía server
         renderLoadMoreBtn();
         return;
       }
-      filtered.forEach(e => listEl.appendChild(buildListItem(e)));
+      // Use DocumentFragment to batch all DOM insertions in one reflow
+      const frag = document.createDocumentFragment();
+      filtered.forEach(e => frag.appendChild(buildListItem(e)));
+      listEl.appendChild(frag);
+
       if (selectedSeq !== null) {
         const el = listEl.querySelector('[data-seq="' + selectedSeq + '"]');
         if (el) el.classList.add("active");
@@ -1345,7 +1379,7 @@
 
         html += '<div class="section">';
         html += '<div class="section-header"><span class="section-title">Decrypted Payload</span></div>';
-        html += '<pre class="json-block">' + highlightJSON(entry.decrypted || {}) + '</pre>';
+        html += '<pre class="json-block">' + highlightJSON(entry.decrypted || {}, entry.uid) + '</pre>';
         html += '</div>';
       }
 
@@ -1544,7 +1578,8 @@
       source.onmessage = (event) => {
         const entry = JSON.parse(event.data);
         pushEntry(entry);
-        rebuildList();
+        // Prepend single item instead of rebuilding entire list
+        prependItem(entry);
 
         const el = listEl.querySelector('[data-seq="' + entry.uid + '"]');
         if (el) el.classList.add("new-flash");

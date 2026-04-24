@@ -38,7 +38,7 @@ const SEED_AES_KEYS = [
 ].filter(item => item.key);
 
 const SEED_IPN_ROUTES = [
-  { path: "/zonkhanh", telegramThreadId: null },
+  { path: "/zonkhanh", telegramThreadId: 6 },
   { path: "/mie", telegramThreadId: 63 },
   { path: "/yfe", telegramThreadId: 65 },
 ];
@@ -405,7 +405,7 @@ function getTelegramValidationState(entry) {
 function formatTelegramMessage(entry) {
   if (entry?.decryptFailed) {
     const prefix = "⚠️ [IPN-LOG] Decrypt failed";
-    const routeLine = `🛤 Route: ${entry?.route || "-"}`;
+    const routeLine = `✈️ Route: ${entry?.route || "-"}`;
     const raw = entry?.rawData != null ? String(entry.rawData) : "";
     return `${prefix}\n${routeLine}\n\nraw data:\n${raw}`;
   }
@@ -448,7 +448,7 @@ function buildTelegramErrorLog(entry, errorInfo) {
 }
 
 async function pushLogToTelegram(entry) {
-  const threadId = entry?.__telegramThreadId ?? "default";
+  const threadId = entry?.__telegramThreadId ?? 4742;  // ← đổi "default" thành 4742
   const fingerprint = entry?.__fingerprint;
   if (fingerprint) {
     const key = `${threadId}|${fingerprint}`;
@@ -459,7 +459,7 @@ async function pushLogToTelegram(entry) {
   }
   telegramQueue.add(async () => {
     const message = formatTelegramMessage(entry);
-    const result = await sendTelegram(message, { maxRetries: 3, threadId: entry?.__telegramThreadId });
+    const result = await sendTelegram(message, { maxRetries: 3, threadId: threadId });  // ← dùng threadId đã resolve ở trên
     if (!result.success) {
       const telegramErrorLog = buildTelegramErrorLog(entry, result);
       pushLog(telegramErrorLog);
@@ -562,7 +562,7 @@ function rebuildDynamicRouter() {
   ipnRoutes.forEach((cfg) => {
     router.post(cfg.path, createIPNHandler({
       routeName: cfg.path,
-      telegramThreadId: cfg.telegramThreadId ?? undefined
+      telegramThreadId: cfg.telegramThreadId ?? 4742
     }));
   });
   dynamicRouter = router;

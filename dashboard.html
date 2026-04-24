@@ -1492,7 +1492,7 @@
     <!-- ACTION SUCCESS / DELETE POPUP -->
     <div id="action-popup-overlay" class="action-popup-overlay" onclick="closeActionPopup()">
         <div class="action-popup-box" id="action-popup-box" onclick="event.stopPropagation()">
-            <div class="action-popup-icon" id="action-popup-icon"></div>
+            <div class="action-popu telegramThreadId: thread === "" ? 0 : Number(thread)p-icon" id="action-popup-icon"></div>
             <div class="action-popup-title" id="action-popup-title"></div>
             <div class="action-popup-desc" id="action-popup-desc"></div>
             <button class="action-popup-btn" onclick="closeActionPopup()">OK</button>
@@ -1756,7 +1756,7 @@
             // if (thread !== "") body.telegramThreadId = thread;
             const body = {
                 path: routePath,
-                telegramThreadId: thread === "" ? 0 : Number(thread)
+                telegramThreadId: thread === "" ? undefined : Number(thread)
             };
             const data = await api("POST", "/dashboard/ipn-routes", body);
             btn.disabled = false;
