@@ -1451,6 +1451,7 @@
       entry._ts = Date.now();
       if (allEntries.length >= MAX_LOGS) allEntries.pop();
       allEntries.unshift(entry);
+      totalIpnCount++; // update totalIpnCount
       updateTabTitle();
       updateCounter();
     }
