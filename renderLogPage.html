@@ -3,8 +3,10 @@
 
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="viewport"
+    content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>IPN Log Viewer</title>
+  <link rel="icon" type="image/png" sizes="16x16" href="/public/favicons/favicon-16x16.png">
   <link
     href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Inter:wght@400;500;600;700&display=swap"
     rel="stylesheet">
@@ -15,6 +17,11 @@
       box-sizing: border-box;
       margin: 0;
       padding: 0;
+    }
+
+    html {
+      touch-action: pan-x pan-y;
+      /* khóa pinch-zoom toàn trang */
     }
 
     :root {
@@ -777,6 +784,8 @@
         transform: translateX(0);
         transition: transform 0.28s cubic-bezier(0.4, 0, 0.2, 1);
         z-index: 2;
+        /* leave room for bottom nav so last item isn't hidden */
+        padding-bottom: calc(var(--bottomnav-h) + var(--safe-bottom));
       }
 
       .sidebar.hidden {
@@ -808,7 +817,16 @@
         display: none;
       }
 
+      .chip.live {
+        display: none;
+      }
+
       .topbar-sep {
+        display: none;
+      }
+
+      /* ẩn counter để topbar không bị tràn trên màn nhỏ */
+      #counter-chip {
         display: none;
       }
 
@@ -1218,12 +1236,25 @@
         (ts ? '<span class="time-text">' + esc(formatTime(ts)) + '</span>' : '') +
         '</div>';
 
-      // SAU — pointerdown fires NGAY khi ngón tay/chuột chạm, không chờ 300ms
-      li.addEventListener("pointerdown", (e) => {
-        // Chỉ xử lý left click / primary touch
-        if (e.button !== undefined && e.button !== 0) return;
+      // Touch-aware click: chỉ trigger khi ngón tay không scroll (di chuyển < 8px)
+      let _touchStartY = 0;
+      let _touchStartX = 0;
+      li.addEventListener("touchstart", (e) => {
+        _touchStartY = e.touches[0].clientY;
+        _touchStartX = e.touches[0].clientX;
+      }, { passive: true });
+      li.addEventListener("touchend", (e) => {
+        const dy = Math.abs(e.changedTouches[0].clientY - _touchStartY);
+        const dx = Math.abs(e.changedTouches[0].clientX - _touchStartX);
+        if (dy > 8 || dx > 8) return; // user đang scroll, bỏ qua
+        e.preventDefault(); // chặn 300ms click delay
         selectEntry(entry.uid);
         if (isMobile()) mobileShowDetail();
+      }, { passive: false });
+      // Desktop: dùng click bình thường
+      li.addEventListener("click", (e) => {
+        if (isMobile()) return; // mobile đã xử lý bằng touch
+        selectEntry(entry.uid);
       });
 
       return li;

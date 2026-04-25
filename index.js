@@ -11,6 +11,8 @@ const telegramQueue = new PQueue({ concurrency: 5, interval: 1000, intervalCap: 
 const app = express();
 app.use(express.json({ limit: "50kb" }));
 
+app.use(express.static(path.join(__dirname, 'public')));
+
 const { Redis } = require("@upstash/redis");
 const redis = new Redis({
   url: process.env.UPSTASH_REDIS_REST_URL,
@@ -63,6 +65,7 @@ app.use((req, res, next) => dynamicRouter(req, res, next));
 // =========================
 // DASHBOARD AUTH
 // =========================
+const IS_LOCAL = !process.env.RENDER; // Render.com tự set biến RENDER=true
 const DASHBOARD_SECRET = process.env.DASHBOARD_SECRET || crypto.randomBytes(32).toString("hex");
 // Map<token, expiresAt>
 const activeSessions = new Map();
@@ -80,18 +83,25 @@ setInterval(() => {
  * Format: khanh.nq1309{HH}{mm}
  */
 function validDashboardPasswords(date) {
-  const vn = new Date(date.toLocaleString("en-US", { timeZone: "Asia/Ho_Chi_Minh" }));
+  // Tính giờ VN từ UTC để đồng nhất giữa local và server
+  const utcMs = date.getTime();
+  const vnOffsetMs = 7 * 60 * 60 * 1000; // UTC+7
+  const vnMs = utcMs + vnOffsetMs;
+  const vnDate = new Date(vnMs);
+
   const candidates = [];
   for (let delta = -1; delta <= 1; delta++) {
-    const d = new Date(vn.getTime() + delta * 60000);
-    const HH = String(d.getHours()).padStart(2, "0");
-    const mm = String(d.getMinutes()).padStart(2, "0");
+    const d = new Date(vnDate.getTime() + delta * 60000);
+    const HH = String(d.getUTCHours()).padStart(2, "0");
+    const mm = String(d.getUTCMinutes()).padStart(2, "0");
     candidates.push(`khanh.nq1309${HH}${mm}`);
   }
   return candidates;
 }
 
 function isValidPassword(password) {
+  // Local dev: cho phép password "dev" để tiện test
+  if (IS_LOCAL && password === "dev") return true;
   return validDashboardPasswords(new Date()).includes(password);
 }
 
@@ -421,18 +431,6 @@ function validateIPNPayload(data) {
 // =========================
 // LOG HELPERS
 // =========================
-function pushEntry(entry) {
-  entry._ts = Date.now();
-  if (allEntries.length >= MAX_LOGS) allEntries.pop();
-  allEntries.unshift(entry);
-  // Chỉ tăng nếu entry thuộc route đang xem (hoặc đang xem tất cả)
-  if (!routeFilter || entry.route === routeFilter) {
-    totalIpnCount++;
-  }
-  updateTabTitle();
-  updateCounter();
-}
-
 function pushLog(entry) {
   // 1. Cập nhật in-memory ngay lập tức
   ipnLogs.push(entry);
@@ -722,7 +720,14 @@ app.get("/logs/count", async (req, res) => {
 });
 
 // Phải đứng SAU /logs/history, /logs/stream, /logs/clear
-app.get("/logs/:route", (req, res) => res.sendFile(LOG_PAGE_PATH));
+app.get("/logs/:route", (req, res) => {
+  const requestedRoute = "/" + req.params.route;
+  const routeExists = ipnRoutes.some(r => r.path === requestedRoute);
+  if (!routeExists) {
+    return res.status(404).sendFile(path.join(__dirname, "public", "404-notfound.html"));
+  }
+  res.sendFile(LOG_PAGE_PATH);
+});
 
 // =========================
 // DASHBOARD ROUTES
@@ -836,6 +841,13 @@ app.delete("/dashboard/ipn-routes/:idx", requireDashboardAuth, async (req, res) 
 // HEALTH CHECK
 // =========================
 app.get("/", (req, res) => res.send("IPN Server Running 🚀 | UI: /logs | Dashboard: /dashboard"));
+
+// =========================
+// 404 CATCH-ALL — PHẢI ĐỨNG CUỐI CÙNG sau tất cả routes
+// =========================
+app.use((req, res) => {
+  res.status(404).sendFile(path.join(__dirname, "public", "404-notfound.html"));
+});
 
 // =========================
 // START
