@@ -125,6 +125,7 @@ function requireDashboardAuth(req, res, next) {
 // =========================
 async function loadConfigFromRedis() {
   try {
+    console.log("[INIT] Loading config from Redis...");
     const [rawKeys, rawRoutes] = await Promise.all([
       redis.get(REDIS_AES_KEYS),
       redis.get(REDIS_IPN_ROUTES),
@@ -133,6 +134,7 @@ async function loadConfigFromRedis() {
     if (rawKeys) {
       const parsed = typeof rawKeys === "string" ? JSON.parse(rawKeys) : rawKeys;
       if (Array.isArray(parsed) && parsed.length > 0) aesKeyList = parsed;
+      console.log(`[INIT] AES keys loaded from Redis: ${aesKeyList.length} keys`);
     } else {
       // Seed lên Redis lần đầu
       await redis.set(REDIS_AES_KEYS, JSON.stringify(SEED_AES_KEYS));
@@ -142,6 +144,7 @@ async function loadConfigFromRedis() {
     if (rawRoutes) {
       const parsed = typeof rawRoutes === "string" ? JSON.parse(rawRoutes) : rawRoutes;
       if (Array.isArray(parsed) && parsed.length > 0) ipnRoutes = parsed;
+      console.log(`[INIT] IPN routes loaded from Redis: ${ipnRoutes.length} routes`);
     } else {
       await redis.set(REDIS_IPN_ROUTES, JSON.stringify(SEED_IPN_ROUTES));
       console.log("[INIT] Seeded IPN routes to Redis");
@@ -151,6 +154,9 @@ async function loadConfigFromRedis() {
   } catch (err) {
     console.error("[INIT] loadConfigFromRedis error:", err.message);
     console.log("[INIT] Falling back to hardcoded seed data");
+    void sendMonitorAlert("loadConfigFromRedis Error", err, {
+      detail: `Falling back to seed data | aesKeys=${aesKeyList.length} | routes=${ipnRoutes.length}`
+    });
   }
 }
 
@@ -303,6 +309,29 @@ function logIPN(type, entry) {
 }
 
 // =========================
+// MONITOR ALERT HELPER
+// =========================
+async function sendMonitorAlert(context, err, extra = {}) {
+  const now = new Date().toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" });
+  const lines = [
+    `🚨 [ERROR] ${context}`,
+    `🕐 ${now}`,
+    `❌ ${err?.message || String(err)}`,
+  ];
+  if (extra.route) lines.push(`✈️ Route: ${extra.route}`);
+  if (extra.detail) lines.push(`📎 ${extra.detail}`);
+  const message = lines.join("\n");
+  try {
+    await Promise.race([
+      sendTelegram(message, { threadId: MONITOR_THREAD_ID }),
+      new Promise((_, reject) => setTimeout(() => reject(new Error("Telegram timeout")), 4000))
+    ]);
+  } catch (teleErr) {
+    console.error(`[MONITOR] Failed to send alert for "${context}":`, teleErr.message);
+  }
+}
+
+// =========================
 // AES / DECRYPT
 // =========================
 function decryptAES(encryptedHex, keyHex) {
@@ -452,6 +481,9 @@ function pushLog(entry) {
         .exec();
     } catch (err) {
       console.error("Redis pushLog error:", err.message);
+      void sendMonitorAlert("Redis pushLog Error", err, {
+        detail: `seq=${entry?.Sequence ?? "-"} | uid=${entry?.uid ?? "-"}`
+      });
     }
   });
 }
@@ -525,6 +557,9 @@ async function pushLogToTelegram(entry) {
       const telegramErrorLog = buildTelegramErrorLog(entry, result);
       pushLog(telegramErrorLog);
       logJSON("TELEGRAM_ERROR", sanitizeLogForDisplay(telegramErrorLog));
+      void sendMonitorAlert("Telegram Send Error", new Error(result?.error?.message || "Unknown"), {
+        detail: `threadId=${threadId} | attempt=${result?.attempt ?? "-"} | merchant=${entry?.merchant ?? "-"}`
+      });
     }
   });
 }
@@ -551,6 +586,9 @@ function buildLogEntry({ body, log, validation }) {
       await redis.expire(REDIS_DUPLICATE_COUNTER, DUPLICATE_TTL_SEC);
     } catch (err) {
       console.error("Redis duplicateCounter persist error:", err.message);
+      void sendMonitorAlert("Redis duplicateCounter Persist Error", err, {
+        detail: `fingerprint=${fingerprint?.slice(0, 12)}...`
+      });
     }
   });
 
@@ -585,33 +623,56 @@ function sanitizeLogForDisplay(logEntry) {
 function createIPNHandler({ routeName, telegramThreadId }) {
   return (req, res) => {
     const body = req.body;
+    const requestId = `${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+    console.log(`[TRACE][${requestId}] ▶ Incoming IPN | route=${routeName} | ip=${req.ip} | bodySize=${JSON.stringify(body).length}B`);
+
     // res.status(200).json({ status: "received" });
     res.status(200).json({ code: "00" });
+    console.log(`[TRACE][${requestId}] ✔ Response 200 sent`);
+
     setImmediate(() => {
       const log = { decrypted: null, status: "pending", merchant: null, attempts: 0, error: null };
       try {
         // const encryptedHex = body?.data;
         const encryptedHex = typeof body?.data === "string" ? body.data.trim() : body?.data;
+        console.log(`[TRACE][${requestId}] 🔍 Extracting encrypted data | hasData=${!!encryptedHex} | dataLength=${encryptedHex?.length ?? 0}`);
         if (!encryptedHex) throw new Error("Missing data field");
+
+        console.log(`[TRACE][${requestId}] 🔐 Attempting decrypt with ${aesKeyList.length} keys...`);
         const result = decryptWithKeys(encryptedHex);
         log.attempts = result.attempts;
+        console.log(`[TRACE][${requestId}] 🔐 Decrypt result | success=${result.success} | attempts=${result.attempts} | merchant=${result.merchant ?? "-"}`);
+
         if (!result.success) throw new Error("All keys failed");
         const decrypted = result.data;
         log.decrypted = decrypted;
         log.merchant = result.merchant;
         log.status = "success";
+
+        console.log(`[TRACE][${requestId}] ✅ Decrypt OK | merchant=${result.merchant} | paymentType=${decrypted?.paymentType ?? "-"} | orderId=${decrypted?.orderId ?? "-"}`);
+
+        console.log(`[TRACE][${requestId}] 📋 Running validation...`);
         const validation = validateIPNPayload(decrypted);
+        console.log(`[TRACE][${requestId}] 📋 Validation done | applied=${validation.applied} | profile=${validation.profile} | valid=${validation.valid}${validation.missingFields?.length ? ` | missing=[${validation.missingFields.join(",")}]` : ""}`);
+
         const uiLog = buildLogEntry({ body, log, validation });
         uiLog.__telegramThreadId = telegramThreadId;
         uiLog.route = routeName;
+
+        console.log(`[TRACE][${requestId}] 💾 Pushing log | seq=${uiLog.Sequence} | uid=${uiLog.uid} | duplicate=${uiLog.duplicateInfo}`);
         pushLog(uiLog);
         logIPN("IPN_SUCCESS", uiLog);
+        console.log(`[TRACE][${requestId}] 🏁 Done`);
       } catch (err) {
         if (err.message === "All keys failed") {
+          console.log(`[TRACE][${requestId}] ⚠️ Decrypt failed — all keys tried | route=${routeName}`);
           const uiLog = buildDecryptFailedLogEntry({ body, routeName, telegramThreadId });
           pushLog(uiLog);
           logJSON("IPN_ERROR", { route: routeName, error: err.message, rawData: body?.data ?? body });
+          // Không gửi monitor alert cho decrypt fail (theo yêu cầu)
         } else {
+          console.error(`[TRACE][${requestId}] ❌ Unexpected error | route=${routeName} | error=${err.message}`);
+          console.error(err.stack);
           log.status = "error"; log.error = err.message;
           const validation = validateIPNPayload(log.decrypted);
           const uiLog = buildLogEntry({ body, log, validation });
@@ -619,6 +680,11 @@ function createIPNHandler({ routeName, telegramThreadId }) {
           uiLog.route = routeName;
           pushLog(uiLog);
           logIPN("IPN_ERROR", uiLog);
+          // Gửi alert về monitor thread
+          void sendMonitorAlert("IPN Handler Error", err, {
+            route: routeName,
+            detail: `requestId=${requestId} | seq=${uiLog.Sequence} | merchant=${uiLog.merchant ?? "-"}`
+          });
         }
       }
     });
@@ -855,9 +921,13 @@ app.use((req, res) => {
 const PORT = process.env.PORT || 3000;
 
 async function startServer() {
+  console.log("[START] Initializing server...");
   await loadConfigFromRedis();
+  console.log("[START] Config loaded");
   await initSequenceFromRedis();
+  console.log("[START] Sequence initialized");
   rebuildDynamicRouter();
+  console.log("[START] Dynamic router built");
 
   app.listen(PORT, "0.0.0.0", () => {
     logJSON("SERVER_START", {
