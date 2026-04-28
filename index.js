@@ -400,12 +400,22 @@ function validateIPNPayload(data) {
     missingFields = requiredFields.filter((field) => !hasOwn(data, field));
     profile = isMasterMerchant ? "master-merchant-card" : "merchant-card";
 
-    if (!hasValue(data?.orderId)) errors.push("orderId must have data");
-    if (!hasValue(data?.referenceRefNo)) {
-      errors.push("referenceRefNo must have data");
-    } else if (hasValue(data?.orderId) && data.referenceRefNo !== data.orderId) {
-      errors.push("referenceRefNo must equal orderId");
+    // Validation rules: check orderId và referenceRefNo bắt buộc có data
+    // if (!hasValue(data?.orderId)) errors.push("orderId must have data");
+    // if (!hasValue(data?.referenceRefNo)) {
+    //   errors.push("referenceRefNo must have data");
+    // } else if (hasValue(data?.orderId) && data.referenceRefNo !== data.orderId) {
+    //   errors.push("referenceRefNo must equal orderId");
+    // }
+
+    if (hasValue(data?.orderId)) {
+      if (!hasValue(data?.referenceRefNo)) {
+        errors.push("referenceRefNo must have data when orderId has data");
+      } else if (data.referenceRefNo !== data.orderId) {
+        errors.push("referenceRefNo must equal orderId");
+      }
     }
+    
     if (hasOwn(data, "extraData")) {
       if (!data.extraData || typeof data.extraData !== "object" || Array.isArray(data.extraData))
         errors.push("extraData must be an object");

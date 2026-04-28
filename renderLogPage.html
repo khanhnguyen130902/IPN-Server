@@ -1306,7 +1306,6 @@
 
     /* ── LOAD MORE BUTTON ── */
     function renderLoadMoreBtn() {
-      // Xóa nút cũ nếu có
       const old = listEl.querySelector(".load-more-wrap");
       if (old) old.remove();
 
@@ -1314,6 +1313,9 @@
       // hoặc tổng IPN <= số item đang hiển thị (không cần phân trang)
       if (!hasMore) return;
       if (totalIpnCountLoaded && totalIpnCount <= allEntries.length) return;
+
+      // ── MỚI: Ẩn nút nếu filter theo status không có kết quả nào ──
+      if (currentFilter !== "all" && allEntries.filter(matchFilter).length === 0) return;
 
       const wrap = document.createElement("div");
       wrap.className = "load-more-wrap";
@@ -1333,9 +1335,10 @@
       listEl.innerHTML = "";
       if (!filtered.length) {
         listEl.innerHTML = '<div class="empty-list"><div class="empty-icon">🔍</div>Không có request nào.</div>';
-        renderLoadMoreBtn();
+        // renderLoadMoreBtn();  ← XÓA dòng này (hoặc giữ cũng được nếu đã có guard trên)
         return;
       }
+
       // Use DocumentFragment to batch all DOM insertions in one reflow
       const frag = document.createDocumentFragment();
       filtered.forEach(e => frag.appendChild(buildListItem(e)));
