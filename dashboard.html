@@ -646,7 +646,73 @@
             }
         }
 
-        /* ── SEED NO-DELETE ── */
+        /* ── USER ROLE BADGE ── */
+        .role-badge {
+            font-size: 10px;
+            font-family: 'JetBrains Mono', monospace;
+            padding: 3px 9px;
+            border-radius: 6px;
+            font-weight: 600;
+            letter-spacing: 0.3px;
+            text-transform: uppercase;
+        }
+
+        .role-badge.admin {
+            background: #4f8cff20;
+            border: 1px solid #4f8cff50;
+            color: var(--accent);
+        }
+
+        .role-badge.user {
+            background: #fbbf2420;
+            border: 1px solid #fbbf2450;
+            color: var(--yellow);
+        }
+
+        /* Khi role=user: ẩn nút xóa, thay bằng icon khóa */
+        .user-role-hidden {
+            display: none !important;
+        }
+
+        .btn-del-locked {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 13px;
+            color: var(--text3);
+            padding: 4px 9px;
+            cursor: default;
+            user-select: none;
+            title: "Bạn không có quyền xóa";
+        }
+
+        /* Banner thông báo quyền hạn cho user role */
+        .user-role-banner {
+            display: none;
+            background: #fbbf2410;
+            border: 1px solid #fbbf2430;
+            border-radius: 8px;
+            padding: 10px 16px;
+            font-size: 12px;
+            color: var(--yellow);
+            font-family: 'JetBrains Mono', monospace;
+            margin: 16px 24px 0;
+            max-width: 860px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        .user-role-banner.visible {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .user-role-banner-icon {
+            font-size: 16px;
+            flex-shrink: 0;
+        }
+
         .btn-del-disabled {
             display: inline-flex;
             align-items: center;
@@ -1292,6 +1358,7 @@
             <div class="topbar-sep"></div>
             <a class="link-logs" href="/logs" target="_blank">→ Log Viewer</a>
             <div class="topbar-right">
+                <span id="role-badge" class="role-badge" style="display:none"></span>
                 <button class="btn-logout" onclick="logout()">Đăng xuất</button>
             </div>
         </div>
@@ -1306,6 +1373,12 @@
             <button class="tab-btn" onclick="switchTab('mgmt', this)">
                 ⚙️ Management
             </button>
+        </div>
+
+        <div id="user-role-banner" class="user-role-banner">
+            <span class="user-role-banner-icon">🔒</span>
+            <span>Bạn đang đăng nhập với quyền <strong>User</strong> — chỉ có thể tạo Route và AES Key, không thể
+                xóa.</span>
         </div>
 
         <!-- TAB: AES KEYS -->
@@ -1533,6 +1606,7 @@
 
         let TOKEN = sessionStorage.getItem("dashboard_token");
         let currentTab = "keys";
+        let currentRole = sessionStorage.getItem("dashboard_role") || "admin"; // "admin" | "user"
         let mgmtIpnTotal = 0;      // tổng IPN realtime
         let mgmtSSE = null;        // SSE connection cho management tab
         let isLoggingIn = false;
@@ -1542,8 +1616,12 @@
             if (!TOKEN) return showLogin();
             try {
                 const r = await fetch("/dashboard/verify", { headers: { "x-dashboard-token": TOKEN } });
-                if (r.ok) showApp();
-                else { sessionStorage.removeItem("dashboard_token"); TOKEN = null; showLogin(); }
+                if (r.ok) {
+                    const data = await r.json();
+                    currentRole = data.role || "admin";
+                    sessionStorage.setItem("dashboard_role", currentRole);
+                    showApp();
+                } else { sessionStorage.removeItem("dashboard_token"); sessionStorage.removeItem("dashboard_role"); TOKEN = null; showLogin(); }
             } catch { showLogin(); }
         }
 
@@ -1556,8 +1634,46 @@
             document.getElementById("login-screen").style.display = "none";
             document.getElementById("app").style.display = "flex";
             document.getElementById("app").style.flexDirection = "column";
+            applyRoleUI();
             loadKeys();
             loadRoutes();
+        }
+
+        // ── ROLE UI ──
+        function applyRoleUI() {
+            const isUser = currentRole === "user";
+
+            // 1. Badge role trên topbar
+            const badge = document.getElementById("role-badge");
+            badge.style.display = "inline-block";
+            if (isUser) {
+                badge.className = "role-badge user";
+                badge.textContent = "👤 User";
+            } else {
+                badge.className = "role-badge admin";
+                badge.textContent = "⚡ Admin";
+            }
+
+            // 2. Ẩn tab Management với user
+            const tabBtns = document.querySelectorAll(".tab-btn");
+            tabBtns.forEach(btn => {
+                if (btn.textContent.includes("Management")) {
+                    btn.style.display = isUser ? "none" : "";
+                }
+            });
+
+            // 3. Banner thông báo cho user
+            const banner = document.getElementById("user-role-banner");
+            if (isUser) {
+                banner.classList.add("visible");
+            } else {
+                banner.classList.remove("visible");
+            }
+        }
+
+        // Kiểm tra role hiện tại có phải admin không
+        function isAdmin() {
+            return currentRole === "admin";
         }
 
         async function doLogin() {
@@ -1586,7 +1702,9 @@
 
                 if (r.ok && data.token) {
                     TOKEN = data.token;
+                    currentRole = data.role || "admin";
                     sessionStorage.setItem("dashboard_token", TOKEN);
+                    sessionStorage.setItem("dashboard_role", currentRole);
                     document.getElementById("login-pass").value = "";
                     showApp();
                 } else {
@@ -1612,7 +1730,9 @@
 
         function logout() {
             sessionStorage.removeItem("dashboard_token");
+            sessionStorage.removeItem("dashboard_role");
             TOKEN = null;
+            currentRole = "admin";
             showLogin();
             document.getElementById("login-pass").value = "";
         }
@@ -1672,9 +1792,15 @@
             }
             let html = visible.map(k => {
                 const badge = k.isSeed ? '<span class="badge-seed">seed</span>' : '';
-                const delBtn = k.isSeed
-                    ? `<span class="btn-del-disabled" title="Seed data không thể xoá">—</span>`
-                    : `<button class="btn-del" onclick="deleteKey(${k.idx})">Xoá</button>`;
+                let delBtn;
+                if (!isAdmin()) {
+                    // User role: ẩn hoàn toàn nút xóa, hiển thị icon khóa
+                    delBtn = `<span class="btn-del-locked" title="Bạn không có quyền xóa">🔒</span>`;
+                } else if (k.isSeed) {
+                    delBtn = `<span class="btn-del-disabled" title="Seed data không thể xoá">—</span>`;
+                } else {
+                    delBtn = `<button class="btn-del" onclick="deleteKey(${k.idx})">Xoá</button>`;
+                }
                 return `<div class="table-row keys-grid">
         <span class="row-idx">${k.idx + 1}</span>
         <span class="row-name-wrap"><span class="row-name">${esc(k.name)}</span>${badge}</span>
@@ -1717,6 +1843,10 @@
         }
 
         async function deleteKey(idx) {
+            if (!isAdmin()) {
+                showActionPopup("error", "Không có quyền", "Bạn không có quyền xóa AES Key.");
+                return;
+            }
             const key = cachedKeys.find(k => k.idx === idx);
             openConfirmModal({
                 title: "Xoá AES Key?",
@@ -1753,9 +1883,15 @@
                     ? `<span class="row-thread">${r.telegramThreadId}</span>`
                     : `<span class="row-thread default">default</span>`;
                 const badge = r.isSeed ? '<span class="badge-seed">seed</span>' : '';
-                const delBtn = r.isSeed
-                    ? `<span class="btn-del-disabled" title="Seed data không thể xoá">—</span>`
-                    : `<button class="btn-del" onclick="deleteRoute(${r.idx ?? 0})">Xoá</button>`;
+                let delBtn;
+                if (!isAdmin()) {
+                    // User role: ẩn hoàn toàn nút xóa, hiển thị icon khóa
+                    delBtn = `<span class="btn-del-locked" title="Bạn không có quyền xóa">🔒</span>`;
+                } else if (r.isSeed) {
+                    delBtn = `<span class="btn-del-disabled" title="Seed data không thể xoá">—</span>`;
+                } else {
+                    delBtn = `<button class="btn-del" onclick="deleteRoute(${r.idx ?? 0})">Xoá</button>`;
+                }
                 return `<div class="table-row routes-grid">
         <span class="row-idx">${(r.idx ?? 0) + 1}</span>
         <span class="row-name-wrap"><span class="row-name">${esc(r.path)}</span>${badge}</span>
@@ -1804,6 +1940,10 @@
         }
 
         async function deleteRoute(idx) {
+            if (!isAdmin()) {
+                showActionPopup("error", "Không có quyền", "Bạn không có quyền xóa IPN Route.");
+                return;
+            }
             const route = cachedRoutes.find(r => r.idx === idx);
             openConfirmModal({
                 title: "Xoá IPN Route?",

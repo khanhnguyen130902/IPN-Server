@@ -67,14 +67,19 @@ app.use((req, res, next) => dynamicRouter(req, res, next));
 // =========================
 const IS_LOCAL = !process.env.RENDER; // Render.com tự set biến RENDER=true
 const DASHBOARD_SECRET = process.env.DASHBOARD_SECRET || crypto.randomBytes(32).toString("hex");
-// Map<token, expiresAt>
+
+// Mật khẩu cố định cho role "user" (chỉ tạo, không xóa)
+const USER_PASSWORD = "atom@2026"; // ← đổi mật khẩu dashboard ở đây
+
+// Map<token, { expiresAt, role }>
+// role: "admin" | "user"
 const activeSessions = new Map();
 
 // Dọn session hết hạn mỗi 10 phút
 setInterval(() => {
   const now = Date.now();
-  for (const [token, exp] of activeSessions) {
-    if (now > exp) activeSessions.delete(token);
+  for (const [token, session] of activeSessions) {
+    if (now > session.expiresAt) activeSessions.delete(token);
   }
 }, 10 * 60 * 1000);
 
@@ -112,10 +117,19 @@ function generateToken() {
 function requireDashboardAuth(req, res, next) {
   const token = req.headers["x-dashboard-token"] || req.query._token;
   if (!token) return res.status(401).json({ error: "Unauthorized" });
-  const exp = activeSessions.get(token);
-  if (!exp || Date.now() > exp) {
+  const session = activeSessions.get(token);
+  if (!session || Date.now() > session.expiresAt) {
     activeSessions.delete(token);
     return res.status(401).json({ error: "Session expired" });
+  }
+  req.dashboardRole = session.role; // "admin" | "user"
+  next();
+}
+
+// Middleware chỉ cho phép admin — user không được xóa
+function requireAdminRole(req, res, next) {
+  if (req.dashboardRole !== "admin") {
+    return res.status(403).json({ error: "Bạn không có quyền thực hiện thao tác này" });
   }
   next();
 }
@@ -415,7 +429,7 @@ function validateIPNPayload(data) {
         errors.push("referenceRefNo must equal orderId");
       }
     }
-    
+
     if (hasOwn(data, "extraData")) {
       if (!data.extraData || typeof data.extraData !== "object" || Array.isArray(data.extraData))
         errors.push("extraData must be an object");
@@ -761,7 +775,7 @@ app.get("/logs/history", async (req, res) => {
 });
 
 
-app.delete("/logs/clear", async (req, res) => {
+app.delete("/logs/clear", requireDashboardAuth, requireAdminRole, async (req, res) => {
   ipnLogs.length = 0;
   await Promise.all([
     redis.del(REDIS_KEY),
@@ -813,17 +827,36 @@ app.get("/dashboard", (req, res) => res.sendFile(DASHBOARD_PAGE_PATH));
 // Login
 app.post("/dashboard/login", (req, res) => {
   const { password } = req.body;
-  if (!password || !isValidPassword(password)) {
+  if (!password) {
     return res.status(401).json({ error: "Sai mật khẩu hoặc đã hết hiệu lực" });
   }
+
+  let role = null;
+
+  // Kiểm tra user@123 trước (role: user)
+  if (password === USER_PASSWORD) {
+    role = "user";
+  } else if (isValidPassword(password)) {
+    role = "admin";
+  }
+
+  if (!role) {
+    return res.status(401).json({ error: "Sai mật khẩu hoặc đã hết hiệu lực" });
+  }
+
   const token = generateToken();
-  activeSessions.set(token, Date.now() + 60 * 60 * 1000); // 1 giờ
-  res.json({ token });
+  activeSessions.set(token, {
+    expiresAt: Date.now() + 60 * 60 * 1000, // 1 giờ
+    role
+  });
+
+  logJSON("DASHBOARD", { action: "LOGIN", role });
+  res.json({ token, role });
 });
 
-// Verify token
+// Verify token — trả về cả role để frontend áp dụng phân quyền
 app.get("/dashboard/verify", requireDashboardAuth, (req, res) => {
-  res.json({ ok: true });
+  res.json({ ok: true, role: req.dashboardRole });
 });
 
 // --- AES Keys API ---
@@ -855,7 +888,7 @@ app.post("/dashboard/aes-keys", requireDashboardAuth, async (req, res) => {
   res.json({ ok: true, total: aesKeyList.length });
 });
 
-app.delete("/dashboard/aes-keys/:idx", requireDashboardAuth, async (req, res) => {
+app.delete("/dashboard/aes-keys/:idx", requireDashboardAuth, requireAdminRole, async (req, res) => {
   const idx = Number(req.params.idx);
   if (isNaN(idx) || idx < 0 || idx >= aesKeyList.length)
     return res.status(400).json({ error: "Index không hợp lệ" });
@@ -902,7 +935,7 @@ app.post("/dashboard/ipn-routes", requireDashboardAuth, async (req, res) => {
   res.json({ ok: true, total: ipnRoutes.length });
 });
 
-app.delete("/dashboard/ipn-routes/:idx", requireDashboardAuth, async (req, res) => {
+app.delete("/dashboard/ipn-routes/:idx", requireDashboardAuth, requireAdminRole, async (req, res) => {
   const idx = Number(req.params.idx);
   if (isNaN(idx) || idx < 0 || idx >= ipnRoutes.length)
     return res.status(400).json({ error: "Index không hợp lệ" });
